@@ -1,5 +1,18 @@
 # Adore Dezign CRM + Website Project Guide
 
+## HANDBOOK RULE
+
+Maintain `handbook.md` throughout this project.
+
+Whenever we introduce a new concept, pattern, or tool (e.g. Mapper class, JWT, Transactions):
+
+- Add a revision entry in `handbook.md`
+- Use bullet points — short, scannable notes
+- Focus on what it is, why we use it, and where it lives in this codebase
+- Update the handbook in the same phase/commit as the feature when possible
+
+---
+
 ## PROJECT VISION
 
 This project is not just a company website.

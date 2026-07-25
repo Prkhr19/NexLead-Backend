@@ -3,6 +3,8 @@ package com.NexLead.common.exception;
 import com.NexLead.common.response.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,6 +21,33 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(buildErrorResponse(
                 HttpStatus.NOT_FOUND.value(),
                 ex.getMessage(),
+                Map.of("error", ex.getMessage())
+        ));
+    }
+
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateResource(DuplicateResourceException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(buildErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                ex.getMessage(),
+                Map.of("error", ex.getMessage())
+        ));
+    }
+
+    @ExceptionHandler({InvalidTokenException.class, BadCredentialsException.class})
+    public ResponseEntity<ErrorResponse> handleUnauthorized(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(buildErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(),
+                ex.getMessage(),
+                Map.of("error", ex.getMessage())
+        ));
+    }
+
+    @ExceptionHandler({AccessDeniedException.class})
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(buildErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                "Access denied",
                 Map.of("error", ex.getMessage())
         ));
     }
