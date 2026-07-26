@@ -9,10 +9,12 @@ import com.NexLead.lead.dto.LeadNotePageResponseDto;
 import com.NexLead.lead.dto.LeadNoteResponseDto;
 import com.NexLead.lead.dto.UpdateLeadNoteRequestDto;
 import com.NexLead.lead.entity.Lead;
+import com.NexLead.lead.entity.LeadActivityType;
 import com.NexLead.lead.entity.LeadNote;
 import com.NexLead.lead.mapper.LeadNoteMapper;
 import com.NexLead.lead.repository.LeadNoteRepository;
 import com.NexLead.lead.repository.LeadRepository;
+import com.NexLead.lead.service.LeadActivityService;
 import com.NexLead.lead.service.LeadNoteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +32,7 @@ public class LeadNoteServiceImpl implements LeadNoteService {
     private final LeadNoteRepository leadNoteRepository;
     private final UserRepository userRepository;
     private final LeadNoteMapper leadNoteMapper;
+    private final LeadActivityService leadActivityService;
 
     @Override
     @Transactional
@@ -39,6 +42,14 @@ public class LeadNoteServiceImpl implements LeadNoteService {
 
         LeadNote note = leadNoteMapper.toEntity(lead, currentUser, request.getContent());
         LeadNote saved = leadNoteRepository.save(note);
+
+        leadActivityService.recordActivity(
+                lead,
+                LeadActivityType.NOTE_ADDED,
+                "Note added",
+                currentUser
+        );
+
         return leadNoteMapper.toResponseDto(saved);
     }
 

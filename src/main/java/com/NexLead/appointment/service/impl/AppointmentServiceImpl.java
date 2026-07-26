@@ -15,9 +15,12 @@ import com.NexLead.auth.entity.User;
 import com.NexLead.auth.repository.UserRepository;
 import com.NexLead.common.exception.BusinessRuleException;
 import com.NexLead.common.exception.ResourceNotFoundException;
+import com.NexLead.common.util.SecurityUtils;
 import com.NexLead.lead.entity.Lead;
+import com.NexLead.lead.entity.LeadActivityType;
 import com.NexLead.lead.entity.LeadStatus;
 import com.NexLead.lead.repository.LeadRepository;
+import com.NexLead.lead.service.LeadActivityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -54,6 +57,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final LeadRepository leadRepository;
     private final UserRepository userRepository;
     private final AppointmentMapper appointmentMapper;
+    private final LeadActivityService leadActivityService;
 
     @Override
     @Transactional
@@ -66,6 +70,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         lead.setStatus(LeadStatus.MEETING_SCHEDULED);
         leadRepository.save(lead);
+
+        recordActivity(lead, LeadActivityType.APPOINTMENT_BOOKED,
+                "Appointment booked for " + saved.getAppointmentDate() + " at " + saved.getAppointmentTime());
 
         return appointmentMapper.toResponseDto(saved);
     }
@@ -119,7 +126,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = findAppointmentOrThrow(id);
         validateStatus(appointment, ACCEPTABLE_STATUSES, "accept");
         appointment.setStatus(AppointmentStatus.ACCEPTED);
-        return appointmentMapper.toResponseDto(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+        recordActivity(saved.getLead(), LeadActivityType.APPOINTMENT_ACCEPTED, "Appointment accepted");
+        return appointmentMapper.toResponseDto(saved);
     }
 
     @Override
@@ -128,7 +137,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = findAppointmentOrThrow(id);
         validateStatus(appointment, CANCELLABLE_STATUSES, "cancel");
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        return appointmentMapper.toResponseDto(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+        recordActivity(saved.getLead(), LeadActivityType.APPOINTMENT_CANCELLED, "Appointment cancelled");
+        return appointmentMapper.toResponseDto(saved);
     }
 
     @Override
@@ -139,7 +150,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setAppointmentTime(request.getAppointmentTime());
         appointment.setStatus(AppointmentStatus.RESCHEDULED);
-        return appointmentMapper.toResponseDto(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+        recordActivity(saved.getLead(), LeadActivityType.APPOINTMENT_RESCHEDULED,
+                "Appointment rescheduled to " + saved.getAppointmentDate() + " at " + saved.getAppointmentTime());
+        return appointmentMapper.toResponseDto(saved);
     }
 
     @Override
@@ -150,7 +164,9 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BusinessRuleException("Only accepted appointments can be marked as completed");
         }
         appointment.setStatus(AppointmentStatus.COMPLETED);
-        return appointmentMapper.toResponseDto(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+        recordActivity(saved.getLead(), LeadActivityType.APPOINTMENT_COMPLETED, "Appointment completed");
+        return appointmentMapper.toResponseDto(saved);
     }
 
     private Appointment findAppointmentOrThrow(Long id) {
@@ -176,6 +192,20 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BusinessRuleException(
                     "Cannot " + action + " appointment with status: " + appointment.getStatus()
             );
+        }
+    }
+
+    private void recordActivity(Lead lead, LeadActivityType type, String description) {
+        User currentUser = findCurrentUserOrNull();
+        leadActivityService.recordActivity(lead, type, description, currentUser);
+    }
+
+    private User findCurrentUserOrNull() {
+        try {
+            String email = SecurityUtils.getCurrentUserEmail();
+            return userRepository.findByEmail(email).orElse(null);
+        } catch (IllegalStateException ex) {
+            return null;
         }
     }
 }
