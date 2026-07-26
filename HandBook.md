@@ -334,6 +334,46 @@ Updated each time we add something new worth revising.
 
 ---
 
+## Lead Assignment
+
+- **What:** Assign leads to staff members (`assignedTo` FK on `Lead`)
+- **API:** `PATCH /api/v1/leads/{id}/assign` with `{ "assignedToId": 1 }` or `null` to unassign
+- **Filters:** `GET /api/v1/leads?assignedToId=1` or `?assignedToMe=true`
+- **Timeline:** Assignment/unassignment recorded as activity events
+
+---
+
+## Lead Activity Timeline
+
+- **What:** Audit trail of everything that happened on a lead
+- **Entity:** `LeadActivity` — type, description, performedBy, timestamp
+- **Auto-recorded from:** lead create/update, notes, appointments, assignment, follow-ups
+- **API:** `GET /api/v1/leads/{leadId}/timeline`
+- **Location:** `lead/entity/LeadActivity.java`, `LeadTimelineController`
+
+---
+
+## Follow-up Tasks (CRM)
+
+- **What:** Scheduled tasks to call/meet/visit a lead — separate from WhatsApp automation (Sprint 4)
+- **Entity:** `FollowUp` — lead, assignedTo, dueDate, type, notes, completed
+- **Types:** CALL, MEETING, SITE_VISIT, WHATSAPP, OTHER
+- **API base:** `/api/v1/follow-ups`
+- **Key filters:** `overdue=true`, `dueToday=true`, `assignedToMe=true`
+- **Location:** `followup/` module
+
+---
+
+## CRM Dashboard Statistics (Sprint 3)
+
+- **What:** Summary cards for CRM home screen — not full Phase 9 analytics
+- **API:** `GET /api/v1/dashboard/stats`
+- **Returns:** today's leads, monthly leads, leads by status, upcoming appointments, follow-ups, leads per assignee
+- **Deferred:** revenue, conversion charts (Sprint 6)
+- **Location:** `dashboard/` module
+
+---
+
 ## Revision Log
 
 | Date | Topic | Module |
@@ -345,3 +385,6 @@ Updated each time we add something new worth revising.
 | Sprint 1 | Lead CRUD, Specification, Pagination | lead |
 | Sprint 3 | Lead Notes, SecurityUtils | lead |
 | Sprint 3 | Appointment Management, BusinessRuleException | appointment |
+| Sprint 3 | Lead Assignment, Activity Timeline | lead |
+| Sprint 3 | Follow-up Tasks | followup |
+| Sprint 3 | CRM Dashboard Statistics | dashboard |
