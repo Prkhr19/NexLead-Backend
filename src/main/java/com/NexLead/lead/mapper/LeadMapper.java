@@ -1,5 +1,6 @@
 package com.NexLead.lead.mapper;
 
+import com.NexLead.auth.entity.User;
 import com.NexLead.lead.dto.CreateLeadRequestDto;
 import com.NexLead.lead.dto.LeadResponseDto;
 import com.NexLead.lead.dto.UpdateLeadRequestDto;
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class LeadMapper {
 
-    public Lead toEntity(CreateLeadRequestDto request) {
+    public Lead toEntity(CreateLeadRequestDto request, User assignedTo) {
         return Lead.builder()
                 .name(request.getName())
                 .phone(request.getPhone())
@@ -22,6 +23,7 @@ public class LeadMapper {
                 .projectStage(request.getProjectStage())
                 .notes(request.getNotes())
                 .status(LeadStatus.NEW)
+                .assignedTo(assignedTo)
                 .build();
     }
 
@@ -39,6 +41,8 @@ public class LeadMapper {
     }
 
     public LeadResponseDto toResponseDto(Lead lead) {
+        User assignee = lead.getAssignedTo();
+
         return LeadResponseDto.builder()
                 .id(lead.getId())
                 .name(lead.getName())
@@ -51,6 +55,8 @@ public class LeadMapper {
                 .projectStage(lead.getProjectStage())
                 .notes(lead.getNotes())
                 .status(lead.getStatus())
+                .assignedToId(assignee != null ? assignee.getId() : null)
+                .assignedToName(assignee != null ? assignee.getName() : null)
                 .createdAt(lead.getCreatedAt())
                 .updatedAt(lead.getUpdatedAt())
                 .build();

@@ -27,6 +27,8 @@ public class LeadResponseDto {
     private String projectStage;
     private String notes;
     private LeadStatus status;
+    private Long assignedToId;
+    private String assignedToName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -43,4 +43,6 @@ public class CreateLeadRequestDto {
     private String projectStage;
 
     private String notes;
+
+    private Long assignedToId;
 }

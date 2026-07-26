@@ -1,5 +1,6 @@
 package com.NexLead.lead.service;
 
+import com.NexLead.lead.dto.AssignLeadRequestDto;
 import com.NexLead.lead.dto.CreateLeadRequestDto;
 import com.NexLead.lead.dto.LeadPageResponseDto;
 import com.NexLead.lead.dto.LeadResponseDto;
@@ -19,10 +20,14 @@ public interface LeadService {
             String city,
             ServiceInterested serviceInterested,
             String search,
+            Long assignedToId,
+            boolean assignedToMe,
             Pageable pageable
     );
 
     LeadResponseDto updateLead(Long id, UpdateLeadRequestDto request);
+
+    LeadResponseDto assignLead(Long id, AssignLeadRequestDto request);
 
     void deleteLead(Long id);
 }

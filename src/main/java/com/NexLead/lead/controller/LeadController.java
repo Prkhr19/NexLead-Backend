@@ -1,6 +1,7 @@
 package com.NexLead.lead.controller;
 
 import com.NexLead.common.response.ApiResponse;
+import com.NexLead.lead.dto.AssignLeadRequestDto;
 import com.NexLead.lead.dto.CreateLeadRequestDto;
 import com.NexLead.lead.dto.LeadPageResponseDto;
 import com.NexLead.lead.dto.LeadResponseDto;
@@ -17,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -53,11 +55,15 @@ public class LeadController {
             @RequestParam(required = false) String city,
             @RequestParam(required = false) ServiceInterested serviceInterested,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long assignedToId,
+            @RequestParam(defaultValue = "false") boolean assignedToMe,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        LeadPageResponseDto leads = leadService.getLeads(status, city, serviceInterested, search, pageable);
+        LeadPageResponseDto leads = leadService.getLeads(
+                status, city, serviceInterested, search, assignedToId, assignedToMe, pageable
+        );
         return ResponseEntity.ok(ApiResponse.success("Leads fetched successfully", leads));
     }
 
@@ -68,6 +74,15 @@ public class LeadController {
     ) {
         LeadResponseDto lead = leadService.updateLead(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead updated successfully", lead));
+    }
+
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<ApiResponse<LeadResponseDto>> assignLead(
+            @PathVariable Long id,
+            @RequestBody AssignLeadRequestDto request
+    ) {
+        LeadResponseDto lead = leadService.assignLead(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Lead assignment updated successfully", lead));
     }
 
     @DeleteMapping("/{id}")

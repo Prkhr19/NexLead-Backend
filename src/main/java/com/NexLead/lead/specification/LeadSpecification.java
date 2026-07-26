@@ -25,6 +25,11 @@ public final class LeadSpecification {
                 serviceInterested == null ? null : cb.equal(root.get("serviceInterested"), serviceInterested);
     }
 
+    public static Specification<Lead> hasAssignedToId(Long assignedToId) {
+        return (root, query, cb) ->
+                assignedToId == null ? null : cb.equal(root.get("assignedTo").get("id"), assignedToId);
+    }
+
     public static Specification<Lead> matchesSearch(String search) {
         return (root, query, cb) -> {
             if (search == null || search.isBlank()) {
@@ -44,11 +49,13 @@ public final class LeadSpecification {
             LeadStatus status,
             String city,
             ServiceInterested serviceInterested,
-            String search
+            String search,
+            Long assignedToId
     ) {
         return Specification.where(hasStatus(status))
                 .and(hasCity(city))
                 .and(hasServiceInterested(serviceInterested))
-                .and(matchesSearch(search));
+                .and(matchesSearch(search))
+                .and(hasAssignedToId(assignedToId));
     }
 }
