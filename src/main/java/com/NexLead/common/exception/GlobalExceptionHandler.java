@@ -34,6 +34,15 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessRule(BusinessRuleException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(buildErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                ex.getMessage(),
+                Map.of("error", ex.getMessage())
+        ));
+    }
+
     @ExceptionHandler({InvalidTokenException.class, BadCredentialsException.class})
     public ResponseEntity<ErrorResponse> handleUnauthorized(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(buildErrorResponse(

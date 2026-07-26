@@ -271,7 +271,66 @@ Updated each time we add something new worth revising.
 | DELETE | `/api/v1/leads/{id}` | Required | Delete lead |
 
 - **Search:** `search` matches name, phone, email, or city (partial, case-insensitive)
-- **Sprint 3 (later):** Lead Notes, Lead Timeline
+
+---
+
+## Lead Notes
+
+- **What:** Timestamped notes attached to a lead — tracks follow-ups, call summaries, site visit details
+- **Entity:** `LeadNote` — content, lead (FK), createdBy (FK to User), timestamps
+- **Nested REST:** Notes live under their parent lead (`/api/v1/leads/{leadId}/notes`)
+- **Auth context:** `SecurityUtils.getCurrentUserEmail()` resolves who created the note from JWT
+- **Location:** `lead/` module (entity, service, controller)
+
+### Lead Notes API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/v1/leads/{leadId}/notes` | Add note |
+| GET | `/api/v1/leads/{leadId}/notes` | List notes (paginated, newest first) |
+| PUT | `/api/v1/leads/{leadId}/notes/{noteId}` | Update note |
+| DELETE | `/api/v1/leads/{leadId}/notes/{noteId}` | Delete note |
+
+---
+
+## SecurityUtils
+
+- **What:** Helper to read the currently authenticated user from Spring Security context
+- **Why:** Services need the logged-in user (e.g. note author) without passing it from controller
+- **Method:** `SecurityUtils.getCurrentUserEmail()` → email from JWT
+- **Location:** `common/util/SecurityUtils.java`
+
+---
+
+## Appointment Management
+
+- **What:** Schedule and track customer consultations / site visits
+- **Entity:** `Appointment` — lead, customerName, date, time, address, assignedDesigner, status
+- **Status flow:** PENDING → ACCEPTED → COMPLETED; or RESCHEDULED / CANCELLED
+- **Business rule:** Booking an appointment auto-updates lead status to `MEETING_SCHEDULED`
+- **Location:** `appointment/` module
+
+### Appointment API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/v1/appointments` | Book appointment |
+| GET | `/api/v1/appointments/{id}` | Get by ID |
+| GET | `/api/v1/appointments` | List with filters: `status`, `leadId`, `assignedDesignerId`, `appointmentDate` |
+| PUT | `/api/v1/appointments/{id}` | Full update |
+| PATCH | `/api/v1/appointments/{id}/accept` | Accept |
+| PATCH | `/api/v1/appointments/{id}/cancel` | Cancel |
+| PATCH | `/api/v1/appointments/{id}/reschedule` | Reschedule date/time |
+| PATCH | `/api/v1/appointments/{id}/complete` | Mark completed |
+
+---
+
+## BusinessRuleException
+
+- **What:** Custom exception for invalid business state transitions
+- **Example:** Accepting a cancelled appointment, completing a pending one
+- **HTTP:** 400 Bad Request via `GlobalExceptionHandler`
+- **Location:** `common/exception/BusinessRuleException.java`
 
 ---
 
@@ -284,3 +343,5 @@ Updated each time we add something new worth revising.
 | Sprint 1 | Global Exception Handler, Validation | common |
 | Sprint 1 | JWT, Refresh Tokens, Filter Chain, RBAC | auth, security |
 | Sprint 1 | Lead CRUD, Specification, Pagination | lead |
+| Sprint 3 | Lead Notes, SecurityUtils | lead |
+| Sprint 3 | Appointment Management, BusinessRuleException | appointment |
