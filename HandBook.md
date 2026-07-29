@@ -345,22 +345,231 @@ Updated each time we add something new worth revising.
 
 ## Lead Activity Timeline
 
-- **What:** Audit trail of everything that happened on a lead
-- **Entity:** `LeadActivity` — type, description, performedBy, timestamp
-- **Auto-recorded from:** lead create/update, notes, appointments, assignment, follow-ups
-- **API:** `GET /api/v1/leads/{leadId}/timeline`
-- **Location:** `lead/entity/LeadActivity.java`, `LeadTimelineController`
+- **What:** Read-only audit trail of everything that happened on a lead — who did what, when
+- **Why:** CRM users need history without digging through notes, appointments, and follow-ups separately
+- **Pattern:** Event log / activity feed — append-only records, never edited or deleted via API
+- **Table:** `lead_activities`
+- **Location:** `lead/entity/LeadActivity.java`, `LeadActivityService`, `LeadTimelineController`
+
+### LeadActivity Entity
+
+- **Fields:** `id`, `lead` (FK), `activityType` (enum), `description` (TEXT), `performedBy` (FK to User, nullable), `createdAt`
+- **Timestamp:** `@CreationTimestamp` on `createdAt` — set automatically on insert, never updated
+- **Relationship:** Many activities → one lead (`@ManyToOne` on `Lead`)
+
+### LeadActivityType Enum
+
+| Type | When recorded |
+|------|---------------|
+| `LEAD_CREATED` | New lead saved |
+| `STATUS_CHANGED` | Lead status updated (e.g. NEW → CONTACTED) |
+| `LEAD_ASSIGNED` | Lead assigned to a user |
+| `LEAD_UNASSIGNED` | Assignee removed |
+| `NOTE_ADDED` | New note created on lead |
+| `APPOINTMENT_BOOKED` | Appointment created |
+| `APPOINTMENT_ACCEPTED` | Appointment accepted |
+| `APPOINTMENT_RESCHEDULED` | Appointment date/time changed |
+| `APPOINTMENT_CANCELLED` | Appointment cancelled |
+| `APPOINTMENT_COMPLETED` | Appointment marked done |
+| `FOLLOW_UP_CREATED` | Follow-up task scheduled |
+| `FOLLOW_UP_COMPLETED` | Follow-up marked complete |
+
+### How Auto-Recording Works
+
+- **Not** a background job, JPA listener, or AOP aspect — each service **explicitly calls** `LeadActivityService.recordActivity()` after the main action succeeds
+- **Same transaction:** Activity is saved inside the same `@Transactional` method as the parent action (e.g. create lead + record activity commit together)
+- **Core method:** `recordActivity(Lead lead, LeadActivityType type, String description, User performedBy)` → builds `LeadActivity` → `leadActivityRepository.save()`
+- **Who performed it:** Resolved via `SecurityUtils.getCurrentUserEmail()` → `UserRepository`; nullable if no auth context (e.g. system actions)
+- **No POST to timeline:** Clients never write activities directly — only other services do
+
+### Which Service Records What
+
+| Service | Triggers |
+|---------|----------|
+| `LeadServiceImpl` | create → `LEAD_CREATED` (+ `LEAD_ASSIGNED` if assignee set); update status → `STATUS_CHANGED`; assign → `LEAD_ASSIGNED` / `LEAD_UNASSIGNED` |
+| `LeadNoteServiceImpl` | create note → `NOTE_ADDED` |
+| `AppointmentServiceImpl` | book / accept / cancel / reschedule / complete → matching `APPOINTMENT_*` type |
+| `FollowUpServiceImpl` | create → `FOLLOW_UP_CREATED`; complete → `FOLLOW_UP_COMPLETED` |
+
+### What Is NOT Recorded (gaps to know for interviews)
+
+- Lead delete — no activity logged
+- Note update or delete — only create triggers `NOTE_ADDED`
+- Follow-up update or delete — only create + complete
+- Appointment full update (`PUT`) — only status-change endpoints log activity
+- Generic lead field edits (name, phone, city) — only **status** change is tracked
+
+### Lead Activity Timeline API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/leads/{leadId}/timeline` | Paginated timeline, newest first |
+
+- **Query params:** `page` (default 0), `size` (default 20)
+- **Sort:** `createdAt DESC` (hardcoded in controller via `PageRequest`)
+- **Auth:** JWT required (same as all protected endpoints)
+- **404:** Lead ID does not exist → `ResourceNotFoundException`
+
+### Response Shape
+
+- **Wrapper:** `ApiResponse<LeadActivityPageResponseDto>`
+- **Page fields:** `content`, `page`, `size`, `totalElements`, `totalPages`
+- **Each item (`LeadActivityResponseDto`):** `id`, `leadId`, `activityType`, `description`, `performedById`, `performedByName`, `createdAt`
+
+### Load & “Self-Update” Flow
+
+1. Frontend opens lead detail → `GET /api/v1/leads/{leadId}/timeline`
+2. User performs action (e.g. adds note) → `POST /api/v1/leads/{leadId}/notes`
+3. Backend saves note **and** writes `NOTE_ADDED` row in same transaction
+4. Frontend **re-fetches** timeline → new entry appears
+- **No real-time push** in this backend — no WebSocket, SSE, or polling endpoint; UI must refetch or poll on its own
+
+### Interview Talking Points
+
+- **Why separate table instead of querying notes/appointments?** Single chronological feed; uniform shape; easy pagination; decoupled from source entities
+- **Why enum for type?** Type-safe, filterable, self-documenting; avoids magic strings in DB
+- **Why description as free text?** Human-readable in UI (e.g. "Status changed from NEW to CONTACTED"); enum alone is not enough
+- **Cross-module recording:** `appointment/` and `followup/` depend on `LeadActivityService` in `lead/` — acceptable for shared audit concern; alternative would be Spring ApplicationEvents for loose coupling
+- **Extension idea:** Add `@EventListener` or domain events so services publish `LeadStatusChangedEvent` and one listener writes activity — reduces scattered `recordActivity()` calls
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `lead/entity/LeadActivity.java` | JPA entity |
+| `lead/entity/LeadActivityType.java` | Activity enum |
+| `lead/repository/LeadActivityRepository.java` | `findByLeadIdOrderByCreatedAtDesc` |
+| `lead/service/LeadActivityService.java` | Interface: `recordActivity`, `getTimeline` |
+| `lead/service/impl/LeadActivityServiceImpl.java` | Write + read logic |
+| `lead/controller/LeadTimelineController.java` | GET endpoint |
+| `lead/mapper/LeadActivityMapper.java` | Entity → `LeadActivityResponseDto` |
+| `lead/dto/LeadActivityResponseDto.java` | Single activity response |
+| `lead/dto/LeadActivityPageResponseDto.java` | Paginated wrapper |
 
 ---
 
 ## Follow-up Tasks (CRM)
 
-- **What:** Scheduled tasks to call/meet/visit a lead — separate from WhatsApp automation (Sprint 4)
-- **Entity:** `FollowUp` — lead, assignedTo, dueDate, type, notes, completed
-- **Types:** CALL, MEETING, SITE_VISIT, WHATSAPP, OTHER
-- **API base:** `/api/v1/follow-ups`
-- **Key filters:** `overdue=true`, `dueToday=true`, `assignedToMe=true`
-- **Location:** `followup/` module
+- **What:** Scheduled reminders for staff to call, meet, or visit a lead — task management inside the CRM
+- **Why:** Sales teams need due dates and assignees; separate from WhatsApp automation (Sprint 4)
+- **Pattern:** Standalone REST resource (`/api/v1/follow-ups`), not nested under leads — but each follow-up belongs to one lead
+- **Table:** `follow_ups`
+- **Location:** `followup/` module (entity, dto, mapper, repository, specification, service, controller)
+
+### FollowUp Entity
+
+- **Fields:** `id`, `lead` (FK), `assignedTo` (FK), `createdBy` (FK), `followUpType` (enum), `dueDate` (`LocalDate`), `notes` (TEXT, optional), `completed` (boolean, default `false`), `createdAt`, `updatedAt`
+- **Three user roles on one record:**
+  - `assignedTo` — who must do the task
+  - `createdBy` — who scheduled it (from JWT via `SecurityUtils`)
+- **Timestamps:** `@CreationTimestamp` + `@UpdateTimestamp`
+- **No status enum:** Only `completed` true/false — simpler than appointment status flow
+
+### FollowUpType Enum
+
+| Type | Typical use |
+|------|-------------|
+| `CALL` | Phone follow-up |
+| `MEETING` | In-office or virtual meeting |
+| `SITE_VISIT` | On-site consultation |
+| `WHATSAPP` | Manual WhatsApp outreach (not Sprint 4 automation) |
+| `OTHER` | Catch-all |
+
+### Follow-up API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/v1/follow-ups` | Create follow-up |
+| GET | `/api/v1/follow-ups/{id}` | Get by ID |
+| GET | `/api/v1/follow-ups` | List with filters (paginated) |
+| PUT | `/api/v1/follow-ups/{id}` | Update (blocked if already completed) |
+| PATCH | `/api/v1/follow-ups/{id}/complete` | Mark completed |
+| DELETE | `/api/v1/follow-ups/{id}` | Delete |
+
+### Create Request Validation
+
+- `leadId` — required
+- `assignedToId` — required
+- `followUpType` — required
+- `dueDate` — required, `@FutureOrPresent` (cannot schedule in the past)
+- `notes` — optional
+
+### List Filters & Sort
+
+| Query param | Behavior |
+|-------------|----------|
+| `leadId` | Follow-ups for one lead |
+| `assignedToId` | Follow-ups for a specific user |
+| `assignedToMe=true` | Overrides `assignedToId` with current JWT user |
+| `completed=true/false` | Filter by completion |
+| `overdue=true` | `dueDate < today` AND `completed = false` |
+| `dueToday=true` | `dueDate = today` |
+| `page`, `size` | Pagination (default 0, 20) |
+
+- **Sort:** `dueDate ASC` — soonest / most urgent first
+- **Implementation:** JPA `Specification` via `FollowUpSpecification.build()` — same pattern as `LeadSpecification`
+
+### Overdue Logic (important for interviews)
+
+```text
+overdue = dueDate < today AND completed = false
+```
+
+- A completed task is **never** overdue, even if its due date was in the past
+- `dueToday` and `overdue` can be combined in one query if both params are `true`
+
+### Business Rules (BusinessRuleException → 400)
+
+| Rule | When |
+|------|------|
+| Completed follow-ups cannot be updated | `PUT` on a `completed=true` record |
+| Follow-up is already completed | `PATCH .../complete` called twice |
+
+- **Delete:** Allowed even on completed follow-ups — no guard
+- **Update due date to past:** Allowed on update DTO (no `@FutureOrPresent` on `UpdateFollowUpRequestDto`) — only create enforces future dates
+
+### Lead Timeline Integration
+
+- **Create** → `FOLLOW_UP_CREATED` activity ("Follow-up scheduled for {date} ({type})")
+- **Complete** → `FOLLOW_UP_COMPLETED` activity ("Follow-up completed ({type})")
+- **Update / delete** → no timeline entry
+
+### Dashboard Integration
+
+- `DashboardServiceImpl` uses `FollowUpRepository` count methods:
+  - `countByDueDateAndCompletedFalse(today)` → today's open follow-ups
+  - `countByDueDateBeforeAndCompletedFalse(today)` → overdue count
+- Exposed in `GET /api/v1/dashboard/stats` as `todaysFollowUps`, `overdueFollowUps`
+
+### Response Shape (FollowUpResponseDto)
+
+- Includes denormalized names for UI: `leadName`, `assignedToName`, `createdByName`
+- Plus IDs, type, dueDate, notes, completed, timestamps
+
+### Interview Talking Points
+
+- **Follow-up vs Appointment:** Appointment = customer-facing event with status workflow; Follow-up = internal staff task with simple done/not-done
+- **Follow-up vs Lead Note:** Note = free-form log entry; Follow-up = actionable task with due date and assignee
+- **Why top-level `/follow-ups` not nested?** Easier global views ("my tasks today", "all overdue") without requiring a leadId; still filterable by `leadId`
+- **Why Specification over @Query?** Composable filters (`leadId` + `overdue` + `assignedToMe`) — same reusable pattern as leads
+- **assignedToMe pattern:** Controller passes flag → service resolves current user ID → spec filters — avoids client sending their own user ID
+- **Extension ideas:** Snooze/reschedule endpoint; auto-create follow-up when appointment completes; email reminder job for overdue tasks
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `followup/entity/FollowUp.java` | JPA entity |
+| `followup/entity/FollowUpType.java` | Type enum |
+| `followup/repository/FollowUpRepository.java` | CRUD + dashboard count queries + `JpaSpecificationExecutor` |
+| `followup/specification/FollowUpSpecification.java` | Dynamic filters (lead, assignee, completed, overdue, dueToday) |
+| `followup/service/impl/FollowUpServiceImpl.java` | Business logic + timeline recording |
+| `followup/controller/FollowUpController.java` | REST endpoints |
+| `followup/mapper/FollowUpMapper.java` | Entity ↔ DTO |
+| `followup/dto/CreateFollowUpRequestDto.java` | Create body + validation |
+| `followup/dto/UpdateFollowUpRequestDto.java` | Update body |
+| `followup/dto/FollowUpResponseDto.java` | Single item response |
+| `followup/dto/FollowUpPageResponseDto.java` | Paginated wrapper |
 
 ---
 
