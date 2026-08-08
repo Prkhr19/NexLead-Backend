@@ -11,4 +11,6 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long>, JpaSp
     long countByDueDateBeforeAndCompletedFalse(LocalDate date);
 
     long countByDueDateAndCompletedFalse(LocalDate date);
+
+    void deleteByLead_Id(Long leadId);
 }

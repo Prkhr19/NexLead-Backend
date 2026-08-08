@@ -11,4 +11,6 @@ import java.util.Collection;
 public interface AppointmentRepository extends JpaRepository<Appointment, Long>, JpaSpecificationExecutor<Appointment> {
 
     long countByAppointmentDateGreaterThanEqualAndStatusIn(LocalDate date, Collection<AppointmentStatus> statuses);
+
+    void deleteByLead_Id(Long leadId);
 }

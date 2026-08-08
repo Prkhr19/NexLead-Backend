@@ -14,6 +14,10 @@ import com.NexLead.lead.entity.LeadActivityType;
 import com.NexLead.lead.entity.LeadStatus;
 import com.NexLead.lead.entity.ServiceInterested;
 import com.NexLead.lead.mapper.LeadMapper;
+import com.NexLead.appointment.repository.AppointmentRepository;
+import com.NexLead.followup.repository.FollowUpRepository;
+import com.NexLead.lead.repository.LeadActivityRepository;
+import com.NexLead.lead.repository.LeadNoteRepository;
 import com.NexLead.lead.repository.LeadRepository;
 import com.NexLead.lead.service.LeadActivityService;
 import com.NexLead.lead.service.LeadService;
@@ -33,6 +37,10 @@ import java.util.Objects;
 public class LeadServiceImpl implements LeadService {
 
     private final LeadRepository leadRepository;
+    private final LeadActivityRepository leadActivityRepository;
+    private final LeadNoteRepository leadNoteRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final FollowUpRepository followUpRepository;
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
     private final LeadActivityService leadActivityService;
@@ -157,8 +165,12 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Transactional
     public void deleteLead(Long id) {
-        Lead lead = findLeadOrThrow(id);
-        leadRepository.delete(lead);
+        findLeadOrThrow(id);
+        leadActivityRepository.deleteByLead_Id(id);
+        leadNoteRepository.deleteByLead_Id(id);
+        appointmentRepository.deleteByLead_Id(id);
+        followUpRepository.deleteByLead_Id(id);
+        leadRepository.deleteById(id);
     }
 
     private Lead findLeadOrThrow(Long id) {

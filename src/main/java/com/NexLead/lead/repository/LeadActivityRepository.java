@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface LeadActivityRepository extends JpaRepository<LeadActivity, Long> {
 
     Page<LeadActivity> findByLeadIdOrderByCreatedAtDesc(Long leadId, Pageable pageable);
+
+    void deleteByLead_Id(Long leadId);
 }

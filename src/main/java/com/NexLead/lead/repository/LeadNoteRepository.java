@@ -12,4 +12,6 @@ public interface LeadNoteRepository extends JpaRepository<LeadNote, Long> {
     Page<LeadNote> findByLeadIdOrderByCreatedAtDesc(Long leadId, Pageable pageable);
 
     Optional<LeadNote> findByIdAndLeadId(Long id, Long leadId);
+
+    void deleteByLead_Id(Long leadId);
 }
