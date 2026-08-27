@@ -2,6 +2,7 @@ package com.NexLead.lead.service.impl;
 
 import com.NexLead.auth.entity.User;
 import com.NexLead.auth.repository.UserRepository;
+import com.NexLead.common.exception.BusinessRuleException;
 import com.NexLead.common.exception.ResourceNotFoundException;
 import com.NexLead.common.util.SecurityUtils;
 import com.NexLead.lead.dto.AssignLeadRequestDto;
@@ -22,6 +23,10 @@ import com.NexLead.lead.repository.LeadRepository;
 import com.NexLead.lead.service.LeadActivityService;
 import com.NexLead.lead.service.LeadService;
 import com.NexLead.lead.specification.LeadSpecification;
+import com.NexLead.project.entity.Project;
+import com.NexLead.project.entity.ProjectStatus;
+import com.NexLead.project.repository.ProjectAssignmentRepository;
+import com.NexLead.project.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +46,8 @@ public class LeadServiceImpl implements LeadService {
     private final LeadNoteRepository leadNoteRepository;
     private final AppointmentRepository appointmentRepository;
     private final FollowUpRepository followUpRepository;
+    private final ProjectRepository projectRepository;
+    private final ProjectAssignmentRepository projectAssignmentRepository;
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
     private final LeadActivityService leadActivityService;
@@ -166,6 +173,18 @@ public class LeadServiceImpl implements LeadService {
     @Transactional
     public void deleteLead(Long id) {
         findLeadOrThrow(id);
+
+        if (projectRepository.existsByLead_IdAndStatusNot(id, ProjectStatus.CANCELLED)) {
+            throw new BusinessRuleException("Cannot delete lead with an active project");
+        }
+
+        List<Project> cancelledProjects =
+                projectRepository.findByLead_IdAndStatus(id, ProjectStatus.CANCELLED);
+        for (Project project : cancelledProjects) {
+            projectAssignmentRepository.deleteByProject_Id(project.getId());
+            projectRepository.delete(project);
+        }
+
         leadActivityRepository.deleteByLead_Id(id);
         leadNoteRepository.deleteByLead_Id(id);
         appointmentRepository.deleteByLead_Id(id);

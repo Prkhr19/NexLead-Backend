@@ -578,8 +578,172 @@ overdue = dueDate < today AND completed = false
 - **What:** Summary cards for CRM home screen — not full Phase 9 analytics
 - **API:** `GET /api/v1/dashboard/stats`
 - **Returns:** today's leads, monthly leads, leads by status, upcoming appointments, follow-ups, leads per assignee
-- **Deferred:** revenue, conversion charts (Sprint 6)
+- **Deferred:** revenue, conversion charts, projects running (Sprint 5+)
 - **Location:** `dashboard/` module
+
+---
+
+## JPA @ManyToOne Relations
+
+- **What:** Maps a child entity to one parent entity; Hibernate creates/maintains the FK column
+- **Why use it over plain `Long parentId`:**
+  - Service validates parent exists before save (same pattern as `FollowUpServiceImpl`)
+  - JPQL joins work (`p.lead.name`, `payment.project.contractAmount`)
+  - Specifications can filter on related entity fields
+  - Consistent with every existing module in this codebase
+- **Pattern used everywhere:** Unidirectional — child holds `@ManyToOne`; parent does **not** have `@OneToMany`
+- **Standard annotations:**
+  - `@ManyToOne(fetch = FetchType.LAZY)` — load parent only when accessed (inside a transaction)
+  - `@JoinColumn(name = "lead_id")` — DB column name for the FK
+  - `optional = false` + `nullable = false` — relation is required
+  - Omit `optional = false` — relation is optional (nullable FK)
+- **What to avoid:**
+  - `cascade = CascadeType.ALL` on Lead/Project relations — deleting a lead must not auto-delete projects
+  - `FetchType.EAGER` — causes N+1 query problems
+  - `@OneToMany` on parent unless you frequently navigate parent → children in Java
+- **Service pattern:** DTO accepts `leadId` / `projectId` → service loads entity → sets object reference on child entity
+- **Interview point:** FK is the DB constraint; `@ManyToOne` is the ORM mapping of that FK to a Java object
+
+### Relation Map (Project & Payment Phase)
+
+```text
+Lead (1) ──────< Project (many)
+User (1) ──────< Project (many)     via assignedTo
+Project (1) ───< Payment (many)
+```
+
+- Lead reachable from payment via: `payment.getProject().getLead()` — no direct `Payment → Lead` FK (by design)
+
+---
+
+## Project Management (Phase 7 — Entity Layer)
+
+- **What:** Tracks active interior-design jobs after lead conversion — progress, timeline, contract value, assigned team
+- **Phase:** ProjectGuide Phase 7 — Sprint 5 (entity layer first; CRUD API deferred)
+- **Table:** `projects`
+- **Location:** `project/entity/`
+
+### Project Entity
+
+- **Fields:** `id`, `name`, `lead` (FK), customer snapshot (`customerName`, `customerPhone`, `customerEmail`, `city`, `address`), `serviceInterested`, `status`, `contractAmount`, `progress` (0–100), `startDate`, `expectedCompletionDate`, `actualCompletionDate`, `assignedTo` (FK), `notes`, `createdAt`, `updatedAt`
+- **Customer snapshot:** Denormalized from lead at project creation — renames on lead don't break project records (same idea as `Appointment.customerName`)
+
+### Project JPA Relations
+
+| Field | Type | Column | Required? |
+|-------|------|--------|-----------|
+| `lead` | `@ManyToOne Lead` | `lead_id` | Yes |
+| `assignedTo` | `@ManyToOne User` | `assigned_to_id` | No |
+
+- Both use `fetch = FetchType.LAZY`
+- Mirrors `Appointment.lead` (required) + `Lead.assignedTo` (optional)
+
+### ProjectStatus Enum
+
+| Status | Meaning |
+|--------|---------|
+| `CREATED` | Project record created (default) |
+| `MEASUREMENT` | Site measurement phase |
+| `DESIGN` | Design / planning phase |
+| `EXECUTION` | Work in progress on site |
+| `COMPLETED` | Project finished |
+| `ON_HOLD` | Paused |
+| `CANCELLED` | Cancelled |
+
+- **Workflow (Phase 7):** Lead → Project Created → Measurement → Design → Execution → Completed
+
+### What's Deferred (not built yet)
+
+- Repository, Service, Controller, DTOs, Mapper
+- `GET/POST/PUT /api/v1/projects` endpoints
+- Filters (by status, assignee, lead)
+- Lead timeline activity types for project events
+- Dashboard `projectsRunning` count
+- Photos, documents, team assignment beyond single `assignedTo`
+
+### Interview Talking Points
+
+- **Lead vs Project:** Lead = sales pipeline; Project = delivery after conversion (WON lead)
+- **Why required `lead` FK?** Every project originates from a lead — traceability and CRM continuity
+- **Why snapshot customer fields?** Historical accuracy; lead contact info may change over time
+- **Why `progress` integer not status only?** Status = phase; progress = % completion within/between phases
+- **Extension ideas:** Multi-user team (`ProjectMember` join table); link to quotation; milestone-based progress auto-update
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `project/entity/Project.java` | JPA entity |
+| `project/entity/ProjectStatus.java` | Status enum |
+
+---
+
+## Payment Tracking (Phase 7 — Entity Layer)
+
+- **What:** Tracks payment installments and milestones against a project — amount due, paid, method, dates
+- **Phase:** ProjectGuide Phase 7 — Sprint 5 (entity layer first; CRUD API deferred)
+- **Table:** `payments`
+- **Location:** `payment/entity/`
+
+### Payment Entity
+
+- **Fields:** `id`, `project` (FK), `amount`, `paidAmount`, `status`, `paymentMethod`, `dueDate`, `paidDate`, `transactionReference`, `notes`, `createdAt`, `updatedAt`
+- **`amount`:** Total due for this payment record (installment or milestone)
+- **`paidAmount`:** How much has been received so far — supports partial payments without splitting records
+
+### Payment JPA Relations
+
+| Field | Type | Column | Required? |
+|-------|------|--------|-----------|
+| `project` | `@ManyToOne Project` | `project_id` | Yes |
+
+- No direct `Lead` FK — customer/lead reached via `payment.getProject().getLead()`
+- **Why no `lead_id` on Payment?** Payments belong to projects; avoids redundant FK. Add optional `lead` later only if token/advance payments before project creation are needed
+
+### PaymentStatus Enum
+
+| Status | Meaning |
+|--------|---------|
+| `PENDING` | Not yet paid (default) |
+| `PARTIAL` | Some amount received |
+| `PAID` | Fully paid |
+| `OVERDUE` | Past due date, not fully paid |
+| `CANCELLED` | Payment record voided |
+
+### PaymentMethod Enum
+
+| Method | Typical use |
+|--------|-------------|
+| `CASH` | Cash payment |
+| `UPI` | UPI transfer |
+| `BANK_TRANSFER` | NEFT/IMPS/RTGS |
+| `CHEQUE` | Cheque |
+| `CARD` | Debit/credit card |
+| `OTHER` | Catch-all |
+
+### What's Deferred (not built yet)
+
+- Repository, Service, Controller, DTOs, Mapper
+- `GET/POST/PUT /api/v1/payments` endpoints
+- Auto-set `OVERDUE` status (scheduled job or query-time logic)
+- Payment reminder WhatsApp (Phase 5 / Sprint 4)
+- Dashboard revenue / pending payment stats
+- Lead timeline integration for payment events
+
+### Interview Talking Points
+
+- **Payment vs Quotation:** Quotation = proposed price; Payment = actual money received against a live project
+- **Why `amount` + `paidAmount`?** One record tracks partial payments — status becomes `PARTIAL` until `paidAmount >= amount`
+- **Why `@ManyToOne Project` not Lead?** Financial tracking is per project; one lead may eventually have multiple projects
+- **Extension ideas:** Payment schedule generator from `contractAmount`; Razorpay/webhook integration; aggregate paid total per project via repository query
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `payment/entity/Payment.java` | JPA entity |
+| `payment/entity/PaymentStatus.java` | Status enum |
+| `payment/entity/PaymentMethod.java` | Method enum |
 
 ---
 
@@ -597,3 +761,6 @@ overdue = dueDate < today AND completed = false
 | Sprint 3 | Lead Assignment, Activity Timeline | lead |
 | Sprint 3 | Follow-up Tasks | followup |
 | Sprint 3 | CRM Dashboard Statistics | dashboard |
+| Sprint 5 | JPA @ManyToOne Relations (pattern) | common |
+| Sprint 5 | Project entity + ProjectStatus | project |
+| Sprint 5 | Payment entity + PaymentStatus + PaymentMethod | payment |

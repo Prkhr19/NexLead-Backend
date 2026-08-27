@@ -2,5 +2,7 @@ package com.NexLead.auth.entity;
 
 public enum Role {
     ADMIN,
-    STAFF
+    STAFF,
+    HR,
+    ACCOUNTANT
 }

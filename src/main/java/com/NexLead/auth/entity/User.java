@@ -51,4 +51,7 @@ public class User {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+
+    private double baseSalary;
 }

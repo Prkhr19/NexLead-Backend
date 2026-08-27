@@ -9,6 +9,9 @@ import com.NexLead.lead.dto.UpdateLeadRequestDto;
 import com.NexLead.lead.entity.LeadStatus;
 import com.NexLead.lead.entity.ServiceInterested;
 import com.NexLead.lead.service.LeadService;
+import com.NexLead.project.dto.ConvertLeadToProjectRequestDto;
+import com.NexLead.project.dto.ProjectResponseDto;
+import com.NexLead.project.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -16,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -33,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LeadController {
 
     private final LeadService leadService;
+    private final ProjectService projectService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<LeadResponseDto>> createLead(
@@ -83,6 +88,19 @@ public class LeadController {
     ) {
         LeadResponseDto lead = leadService.assignLead(id, request);
         return ResponseEntity.ok(ApiResponse.success("Lead assignment updated successfully", lead));
+    }
+
+    @PostMapping("/{id}/convert-to-project")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    public ResponseEntity<ApiResponse<ProjectResponseDto>> convertToProject(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) ConvertLeadToProjectRequestDto request
+    ) {
+        ConvertLeadToProjectRequestDto effectiveRequest =
+                request != null ? request : new ConvertLeadToProjectRequestDto();
+        ProjectResponseDto project = projectService.convertFromWonLead(id, effectiveRequest);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Lead converted to project successfully", project));
     }
 
     @DeleteMapping("/{id}")
