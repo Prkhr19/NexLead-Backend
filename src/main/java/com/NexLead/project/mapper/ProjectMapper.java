@@ -28,7 +28,6 @@ public class ProjectMapper {
                 .serviceInterested(lead.getServiceInterested())
                 .status(ProjectStatus.CREATED)
                 .contractAmount(request.getContractAmount())
-                .progress(0)
                 .startDate(request.getStartDate())
                 .expectedCompletionDate(request.getExpectedCompletionDate())
                 .notes(request.getNotes())
@@ -49,7 +48,6 @@ public class ProjectMapper {
                 .serviceInterested(project.getServiceInterested())
                 .status(project.getStatus())
                 .contractAmount(project.getContractAmount())
-                .progress(project.getProgress())
                 .startDate(project.getStartDate())
                 .expectedCompletionDate(project.getExpectedCompletionDate())
                 .actualCompletionDate(project.getActualCompletionDate())
@@ -69,7 +67,6 @@ public class ProjectMapper {
         project.setServiceInterested(request.getServiceInterested());
         project.setStatus(request.getStatus());
         project.setContractAmount(request.getContractAmount());
-        project.setProgress(request.getProgress());
         project.setStartDate(request.getStartDate());
         project.setExpectedCompletionDate(request.getExpectedCompletionDate());
         project.setActualCompletionDate(request.getActualCompletionDate());

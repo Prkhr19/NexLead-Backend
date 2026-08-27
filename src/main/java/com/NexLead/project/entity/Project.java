@@ -64,10 +64,6 @@ public class Project {
 
     private BigDecimal contractAmount;
 
-    @Builder.Default
-    @Column(nullable = false)
-    private Integer progress = 0;
-
     private LocalDate startDate;
 
     private LocalDate expectedCompletionDate;

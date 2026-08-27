@@ -19,6 +19,7 @@ public class DashboardStatsResponseDto {
     private long upcomingAppointments;
     private long todaysFollowUps;
     private long overdueFollowUps;
+    private long ongoingProjects;
     private List<LeadStatusCountDto> leadsByStatus;
     private List<AssigneeLeadCountDto> leadsPerAssignee;
 }

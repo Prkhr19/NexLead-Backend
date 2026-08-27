@@ -9,6 +9,8 @@ import com.NexLead.dashboard.service.DashboardService;
 import com.NexLead.followup.repository.FollowUpRepository;
 import com.NexLead.lead.entity.LeadStatus;
 import com.NexLead.lead.repository.LeadRepository;
+import com.NexLead.project.entity.ProjectStatus;
+import com.NexLead.project.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final LeadRepository leadRepository;
     private final AppointmentRepository appointmentRepository;
     private final FollowUpRepository followUpRepository;
+    private final ProjectRepository projectRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -45,6 +48,10 @@ public class DashboardServiceImpl implements DashboardService {
 
         long todaysFollowUps = followUpRepository.countByDueDateAndCompletedFalse(today);
         long overdueFollowUps = followUpRepository.countByDueDateBeforeAndCompletedFalse(today);
+
+        long ongoingProjects = projectRepository.countByStatusNotIn(
+                List.of(ProjectStatus.COMPLETED, ProjectStatus.CANCELLED)
+        );
 
         List<LeadStatusCountDto> leadsByStatus = Arrays.stream(LeadStatus.values())
                 .map(status -> LeadStatusCountDto.builder()
@@ -67,6 +74,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .upcomingAppointments(upcomingAppointments)
                 .todaysFollowUps(todaysFollowUps)
                 .overdueFollowUps(overdueFollowUps)
+                .ongoingProjects(ongoingProjects)
                 .leadsByStatus(leadsByStatus)
                 .leadsPerAssignee(leadsPerAssignee)
                 .build();

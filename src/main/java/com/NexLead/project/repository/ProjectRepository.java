@@ -14,4 +14,6 @@ public interface ProjectRepository extends JpaRepository<Project, Long>, JpaSpec
     boolean existsByLead_IdAndStatusNot(Long leadId, ProjectStatus status);
 
     List<Project> findByLead_IdAndStatus(Long leadId, ProjectStatus status);
+
+    long countByStatusNotIn(List<ProjectStatus> statuses);
 }

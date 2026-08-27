@@ -30,7 +30,6 @@ public class ProjectResponseDto {
     private ServiceInterested serviceInterested;
     private ProjectStatus status;
     private BigDecimal contractAmount;
-    private Integer progress;
     private LocalDate startDate;
     private LocalDate expectedCompletionDate;
     private LocalDate actualCompletionDate;
