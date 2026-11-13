@@ -18,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -53,10 +55,15 @@ public class DashboardServiceImpl implements DashboardService {
                 List.of(ProjectStatus.COMPLETED, ProjectStatus.CANCELLED)
         );
 
+        Map<LeadStatus, Long> statusCounts = new EnumMap<>(LeadStatus.class);
+        for (Object[] row : leadRepository.countLeadsGroupedByStatus()) {
+            statusCounts.put((LeadStatus) row[0], (Long) row[1]);
+        }
+
         List<LeadStatusCountDto> leadsByStatus = Arrays.stream(LeadStatus.values())
                 .map(status -> LeadStatusCountDto.builder()
                         .status(status)
-                        .count(leadRepository.countByStatus(status))
+                        .count(statusCounts.getOrDefault(status, 0L))
                         .build())
                 .toList();
 

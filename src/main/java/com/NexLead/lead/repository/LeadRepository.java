@@ -19,4 +19,7 @@ public interface LeadRepository extends JpaRepository<Lead, Long>, JpaSpecificat
 
     @Query("SELECT l.assignedTo.name, COUNT(l) FROM Lead l WHERE l.assignedTo IS NOT NULL GROUP BY l.assignedTo.id, l.assignedTo.name")
     List<Object[]> countLeadsGroupedByAssignee();
+
+    @Query("SELECT l.status, COUNT(l) FROM Lead l GROUP BY l.status")
+    List<Object[]> countLeadsGroupedByStatus();
 }
