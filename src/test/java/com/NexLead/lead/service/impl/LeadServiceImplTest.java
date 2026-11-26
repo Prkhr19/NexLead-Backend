@@ -132,7 +132,7 @@ class LeadServiceImplTest {
         when(leadRepository.findById(1L)).thenReturn(Optional.of(lead));
         when(lead.getStatus()).thenReturn(LeadStatus.CONTACTED);
         when(leadRepository.save(lead)).thenReturn(save);
-        when(lead.getStatus()).thenReturn(LeadStatus.WON);
+        when(save.getStatus()).thenReturn(LeadStatus.WON);
 
         leadService.updateLead(1L, requestDto);
 
