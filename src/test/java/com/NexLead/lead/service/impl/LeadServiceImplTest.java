@@ -1,4 +1,12 @@
 package com.NexLead.lead.service.impl;
+import com.NexLead.auth.entity.User;
+import com.NexLead.lead.dto.CreateLeadRequestDto;
+import com.NexLead.lead.dto.LeadPageResponseDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import com.NexLead.appointment.repository.AppointmentRepository;
 import com.NexLead.auth.repository.UserRepository;
@@ -55,6 +63,135 @@ class LeadServiceImplTest {
         when(leadRepository.findById(99L)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class, () -> leadService.getLeadById(99L));
     }
+    @Test
+    void createLead_recordsOnlyCreatedActivity_whenNoAssignee() {
+        CreateLeadRequestDto request = mock(CreateLeadRequestDto.class);
+        Lead lead = mock(Lead.class);
+        Lead saved = mock(Lead.class);
+
+        when(request.getAssignedToId()).thenReturn(null);   // unstubbed Long would return 0, not null
+        when(leadMapper.toEntity(request, null)).thenReturn(lead);
+        when(leadRepository.save(lead)).thenReturn(saved);
+
+        leadService.createLead(request);
+
+        verify(leadActivityService).recordActivity(
+                eq(saved), eq(LeadActivityType.LEAD_CREATED), anyString(), any());
+        verify(leadActivityService, never()).recordActivity(
+                any(), eq(LeadActivityType.LEAD_ASSIGNED), anyString(), any());
+    }
+
+    @Test
+    void createLead_recordsCreatedAndAssignedActivities_whenAssigneeGiven() {
+        CreateLeadRequestDto request = mock(CreateLeadRequestDto.class);
+        User assignee = mock(User.class);
+        Lead lead = mock(Lead.class);
+        Lead saved = mock(Lead.class);
+
+        when(request.getAssignedToId()).thenReturn(7L);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(assignee));
+        when(leadMapper.toEntity(request, assignee)).thenReturn(lead);
+        when(leadRepository.save(lead)).thenReturn(saved);
+
+        leadService.createLead(request);
+
+        verify(leadActivityService).recordActivity(
+                eq(saved), eq(LeadActivityType.LEAD_CREATED), anyString(), any());
+        verify(leadActivityService).recordActivity(
+                eq(saved), eq(LeadActivityType.LEAD_ASSIGNED), anyString(), any());
+    }
+
+    @Test
+    void assignLead_recordsAssigned_whenLeadWasUnassigned() {
+        AssignLeadRequestDto request = mock(AssignLeadRequestDto.class);
+        Lead lead = mock(Lead.class);
+        Lead saved = mock(Lead.class);
+        User assignee = mock(User.class);
+
+        when(leadRepository.findById(1L)).thenReturn(Optional.of(lead));
+        when(request.getAssignedToId()).thenReturn(7L);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(assignee));
+        when(assignee.getId()).thenReturn(7L);
+        when(leadRepository.save(lead)).thenReturn(saved);
+
+        leadService.assignLead(1L, request);
+
+        verify(lead).setAssignedTo(assignee);
+        verify(leadActivityService).recordActivity(
+                eq(saved), eq(LeadActivityType.LEAD_ASSIGNED), anyString(), any());
+    }
+
+    @Test
+    void assignLead_recordsUnassigned_whenAssigneeRemoved() {
+        AssignLeadRequestDto request = mock(AssignLeadRequestDto.class);
+        Lead lead = mock(Lead.class);
+        Lead saved = mock(Lead.class);
+        User previous = mock(User.class);
+
+        when(leadRepository.findById(1L)).thenReturn(Optional.of(lead));
+        when(lead.getAssignedTo()).thenReturn(previous);
+        when(request.getAssignedToId()).thenReturn(null);
+        when(leadRepository.save(lead)).thenReturn(saved);
+
+        leadService.assignLead(1L, request);
+
+        verify(lead).setAssignedTo(null);
+        verify(leadActivityService).recordActivity(
+                eq(saved), eq(LeadActivityType.LEAD_UNASSIGNED), anyString(), any());
+    }
+
+    @Test
+    void assignLead_doesNotRecordActivity_whenAssigneeUnchanged() {
+        AssignLeadRequestDto request = mock(AssignLeadRequestDto.class);
+        Lead lead = mock(Lead.class);
+        Lead saved = mock(Lead.class);
+        User previous = mock(User.class);
+        User assignee = mock(User.class);
+
+        when(leadRepository.findById(1L)).thenReturn(Optional.of(lead));
+        when(lead.getAssignedTo()).thenReturn(previous);
+        when(previous.getId()).thenReturn(7L);
+        when(request.getAssignedToId()).thenReturn(7L);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(assignee));
+        when(assignee.getId()).thenReturn(7L);
+        when(leadRepository.save(lead)).thenReturn(saved);
+
+        leadService.assignLead(1L, request);
+
+        verify(leadActivityService, never()).recordActivity(any(), any(), any(), any());
+    }
+
+    @Test
+    void deleteLead_removesCancelledProjectsAndTheirAssignments() {
+        Project project = mock(Project.class);
+
+        when(leadRepository.findById(1L)).thenReturn(Optional.of(mock(Lead.class)));
+        when(projectRepository.existsByLead_IdAndStatusNot(1L, ProjectStatus.CANCELLED)).thenReturn(false);
+        when(projectRepository.findByLead_IdAndStatus(1L, ProjectStatus.CANCELLED)).thenReturn(List.of(project));
+        when(project.getId()).thenReturn(10L);
+
+        leadService.deleteLead(1L);
+
+        verify(projectAssignmentRepository).deleteByProject_Id(10L);
+        verify(projectRepository).delete(project);
+        verify(leadRepository).deleteById(1L);
+    }
+
+    @Test
+    void getLeads_returnsMappedPage() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Lead lead = mock(Lead.class);
+        LeadResponseDto dto = mock(LeadResponseDto.class);
+        Page<Lead> page = new PageImpl<>(List.of(lead), pageable, 1);
+
+        when(leadRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+        when(leadMapper.toResponseDto(lead)).thenReturn(dto);
+
+        LeadPageResponseDto result = leadService.getLeads(null, null, null, null, null, false, pageable);
+
+        assertEquals(1, result.getContent().size());
+        assertSame(dto, result.getContent().get(0));
+    }
 
     @Test
     void deleteLead_throwsWhenLeadHasActiveProject() {
@@ -85,7 +222,7 @@ class LeadServiceImplTest {
         verify(leadRepository).deleteById(1L);
         verify(appointmentRepository).deleteByLead_Id(1L);
         verify(followUpRepository).deleteByLead_Id(1L);
-        verify(followUpRepository).deleteByLead_Id(1L);
+        verify(leadActivityRepository).deleteByLead_Id(1L);
     }
 
     @Test
@@ -102,18 +239,6 @@ class LeadServiceImplTest {
 
     }
 
-    @Test
-    void getAssigeeById_throwsWhenAssigneeDoesNotExists(){
-        AssignLeadRequestDto requestDto = mock(AssignLeadRequestDto.class);
-
-        when(leadRepository.findById(1L)).thenReturn(Optional.of(mock(Lead.class)));
-        when(requestDto.getAssignedToId()).thenReturn(99L);
-        when(userRepository.findById(99L)).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> leadService.assignLead(1L, requestDto));
-
-        verify(leadRepository, never()).save(any());
-    }
     @Test
     void updateLead_throwsWhenLeadDoesNotExist(){
         UpdateLeadRequestDto request = mock(UpdateLeadRequestDto.class);
