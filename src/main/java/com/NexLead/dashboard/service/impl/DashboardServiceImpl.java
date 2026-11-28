@@ -12,6 +12,7 @@ import com.NexLead.lead.repository.LeadRepository;
 import com.NexLead.project.entity.ProjectStatus;
 import com.NexLead.project.repository.ProjectRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,8 +32,11 @@ public class DashboardServiceImpl implements DashboardService {
     private final FollowUpRepository followUpRepository;
     private final ProjectRepository projectRepository;
 
+
+    @Cacheable(cacheNames = "dashboardStats", key = "'stats'", sync = true)
     @Override
     @Transactional(readOnly = true)
+    
     public DashboardStatsResponseDto getStats() {
         LocalDate today = LocalDate.now();
         LocalDateTime startOfToday = today.atStartOfDay();

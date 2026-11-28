@@ -5,13 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DashboardStatsResponseDto {
+public class DashboardStatsResponseDto implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private long todaysLeads;
     private long monthlyLeads;
